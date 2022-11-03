@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using static Models;
 
-public class Character_Controller : MonoBehaviour
+public class PlayerCharacterController : MonoBehaviour
 {
     private CharacterController characterController;
     private DefaultInput defaultInput;
-    public Vector2 input_Movement;
+    private Vector2 input_Movement;
+    [HideInInspector]
     public Vector2 input_View;
 
     private Vector3 newCameraRotation;
@@ -15,11 +16,13 @@ public class Character_Controller : MonoBehaviour
 
     [Header("References")]
     public Transform cameraHolder;
+    public Transform feetTransform;
 
     [Header("Settings")]
     public PlayerSettingsModel playerSettings;
     public float viewClampYMin = -70;
     public float viewClampYMax = 80;
+    public LayerMask playerMask;
 
     [Header("Gravity")]
     public float gravity;
@@ -31,20 +34,25 @@ public class Character_Controller : MonoBehaviour
 
     [Header("Stance")]
     public PlayerStance playerStance;
+    public bool waitingToStand = false;
     public float playerStanceSmoothing;
 
     public CharacterStance playerStandStance;
     public CharacterStance playerCrouchStance;
-    public CharacterStance playerProneStance;
 
+    private float stanceCheckErrorMargin = 0.05f;
     private float cameraHeight;
     private float cameraHeightVelocity;
 
-    private Vector3 stanceCapsuleCenter;
     private Vector3 stanceCapsuleCenterVelocity;
-
-    private float stanceCapsuleHeight;
     private float stanceCapsuleHeightVelocity;
+
+    public bool isSprinting;
+    private Vector3 newMovementSpeed;
+    private Vector3 newMovementSpeedVelocity;
+
+    [Header("Weapon")]
+    public WeaponController currentWeapon;
 
     private void Awake() {
         defaultInput = new DefaultInput();
@@ -52,6 +60,10 @@ public class Character_Controller : MonoBehaviour
         defaultInput.Character.Movement.performed += e => input_Movement = e.ReadValue<Vector2>();
         defaultInput.Character.View.performed += e => input_View = e.ReadValue<Vector2>();
         defaultInput.Character.Jump.performed += e => Jump();
+        defaultInput.Character.Crouch.performed += e => Crouch();
+        defaultInput.Character.Crouch.canceled += e => StartCoroutine(Stand());
+        defaultInput.Character.Sprint.performed += e => ToggleSprint();
+        defaultInput.Character.Sprint.canceled += e => ToggleSprint();
         
         defaultInput.Enable();
 
@@ -61,6 +73,10 @@ public class Character_Controller : MonoBehaviour
         characterController = GetComponent<CharacterController>();
 
         cameraHeight = cameraHolder.localPosition.y;
+
+        if (currentWeapon) {
+            currentWeapon.Initialize(this);
+        }
     }
 
     private void Update() {
@@ -79,15 +95,27 @@ public class Character_Controller : MonoBehaviour
         newCameraRotation.x = Mathf.Clamp(newCameraRotation.x, viewClampYMin, viewClampYMax);
         
         cameraHolder.localRotation = Quaternion.Euler(newCameraRotation);
-
     }
 
     private void CalculateMovement() {
-        var frontSpeed = playerSettings.WalkingForwardSpeed * input_Movement.y * Time.deltaTime;
-        var sideSpeed = playerSettings.WalkingStrafeSpeed * input_Movement.x * Time.deltaTime;
+        var forwardSpeed = playerSettings.WalkingForwardSpeed;
+        var strafeSpeed = playerSettings.WalkingStrafeSpeed;
 
-        var newMovementSpeed = new Vector3(sideSpeed, 0, frontSpeed);
-        newMovementSpeed = transform.TransformDirection(newMovementSpeed);
+        if (isSprinting) {
+            forwardSpeed = playerSettings.SprintingForwardSpeed;
+            strafeSpeed = playerSettings.SprintingStrafeSpeed;
+        }
+
+        if (playerStance == PlayerStance.Crouching) {
+            forwardSpeed *= playerSettings.CrouchSpeedModifier;
+            strafeSpeed *= playerSettings.CrouchSpeedModifier;
+        } else {
+            forwardSpeed *= playerSettings.SpeedModifier;
+            strafeSpeed *= playerSettings.SpeedModifier;
+        }
+
+        newMovementSpeed = Vector3.SmoothDamp(newMovementSpeed, new Vector3(strafeSpeed * input_Movement.x * Time.deltaTime, 0, forwardSpeed * input_Movement.y * Time.deltaTime), ref newMovementSpeedVelocity, playerSettings.MovementSmoothing);
+        var movementSpeed = transform.TransformDirection(newMovementSpeed);
 
         if (playerGravity > gravityMin) {
             playerGravity -= gravity * Time.deltaTime;
@@ -97,11 +125,10 @@ public class Character_Controller : MonoBehaviour
             playerGravity = - 0.1f;
         }
 
-        newMovementSpeed.y += playerGravity;
+        movementSpeed.y += playerGravity;
+        movementSpeed += jumpForce * Time.deltaTime;
 
-        newMovementSpeed += jumpForce * Time.deltaTime;
-
-        characterController.Move(newMovementSpeed);
+        characterController.Move(movementSpeed);
     }
 
     private void CalculateJump(){
@@ -112,8 +139,6 @@ public class Character_Controller : MonoBehaviour
         var currentStance = playerStandStance;
         if (playerStance == PlayerStance.Crouching) {
             currentStance = playerCrouchStance;
-        } else if (playerStance == PlayerStance.Proning) {
-            currentStance = playerProneStance;
         }
         cameraHeight = Mathf.SmoothDamp(cameraHolder.transform.localPosition.y, currentStance.CameraHeight, ref cameraHeightVelocity, playerStanceSmoothing);
 
@@ -126,7 +151,46 @@ public class Character_Controller : MonoBehaviour
     private void Jump() {
         if (!characterController.isGrounded) { return; }
 
+        if (playerStance == PlayerStance.Crouching) {
+            playerStance = PlayerStance.Standing;
+            return; 
+        }
+
+        if (StanceCheck(playerStandStance.StanceCollider.height)) {
+            return;
+        }
+
         jumpForce = Vector3.up * playerSettings.JumpHeight;
         playerGravity = 0;
+    }
+
+    private IEnumerator Stand() {
+        //stand up once player has space
+        //if player releases crouch while in an unstandable position, Stand() is triggered. If they press crouch again, it is cancelled.
+        waitingToStand = true;
+        while (waitingToStand && StanceCheck(playerStandStance.StanceCollider.height)) { yield return new WaitForSeconds(0.1f); }
+        if (waitingToStand) {
+            playerStance = PlayerStance.Standing;
+            waitingToStand = false;
+        }
+    }
+
+    private void Crouch() {
+        waitingToStand = false;
+        playerStance = PlayerStance.Crouching;
+    }
+
+    private bool StanceCheck(float stanceCheckHeight) {
+        Vector3 start = new Vector3(feetTransform.position.x, feetTransform.position.y + characterController.radius + stanceCheckErrorMargin, feetTransform.position.z);
+        Vector3 end = new Vector3(feetTransform.position.x, feetTransform.position.y - characterController.radius - stanceCheckErrorMargin + stanceCheckHeight, feetTransform.position.z);
+        return Physics.CheckCapsule(start, end, characterController.radius, playerMask);
+    }
+
+    private void ToggleSprint() {
+        /*if (input_Movement.y <= 0.2f) {
+            isSprinting = false;
+            return;
+        }*/
+        isSprinting = !isSprinting;
     }
 }

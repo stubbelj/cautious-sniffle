@@ -9,7 +9,6 @@ public class Models
     public enum PlayerStance {
         Standing,
         Crouching,
-        Proning
     }
 
     [Serializable]
@@ -21,14 +20,25 @@ public class Models
         public bool ViewXInverted;
         public bool ViewYInverted;
 
-        [Header("Movement")]
+        [Header("Movement - Settings")]
+        public float MovementSmoothing;
+
+        [Header("Movement - Sprinting")]
+        public float SprintingForwardSpeed;
+        public float SprintingStrafeSpeed;
+
+        [Header("Movement - Walking")]
         public float WalkingForwardSpeed;
         public float WalkingStrafeSpeed;
         public float WalkingBackwardsSpeed;
 
-        [Header("Jump")]
+        [Header("Jumping")]
         public float JumpHeight;
         public float JumpFalloff;
+
+        [Header("SpeedModifiers")]
+        public float SpeedModifier = 1;
+        public float CrouchSpeedModifier;
     }
 
     [Serializable]
@@ -37,5 +47,18 @@ public class Models
         public CapsuleCollider StanceCollider;
     }
 
-    #endregion - Player -
+    #endregion
+
+    [Serializable]
+    public class WeaponSettingsModel {
+        [Header("Sway")]
+        public float SwayAmount;
+        public float SwaySmoothing;
+        public bool SwayYInverted;
+        public bool SwayXInverted;
+    }
+
+    #region - Weapons -
+
+    #endregion
 }
