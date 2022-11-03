@@ -39,6 +39,10 @@ public class Models
         [Header("SpeedModifiers")]
         public float SpeedModifier = 1;
         public float CrouchSpeedModifier;
+
+        [Header("IsGrounded / Falling")]
+        public float IsGroundedRadius;
+        public float IsFallingSpeed;
     }
 
     [Serializable]
@@ -51,7 +55,7 @@ public class Models
 
     [Serializable]
     public class WeaponSettingsModel {
-        [Header("Sway")]
+        [Header("Weapon Sway")]
         public float SwayAmount;
         public float SwaySmoothing;
         public bool SwayYInverted;
@@ -60,6 +64,13 @@ public class Models
         public float SwayResetSmoothing;
         public float SwayClampX;
         public float SwayClampY;
+
+        [Header("Weapon Movement Sway")]
+        public float MovementSwayX;
+        public float MovementSwayY;
+        public bool MovementSwayYInverted;
+        public bool MovementSwayXInverted;
+        public float MovementSwaySmoothing;
     }
 
     #region - Weapons -

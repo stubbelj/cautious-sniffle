@@ -7,7 +7,8 @@ public class PlayerCharacterController : MonoBehaviour
 {
     private CharacterController characterController;
     private DefaultInput defaultInput;
-    private Vector2 input_Movement;
+    [HideInInspector]
+    public Vector2 input_Movement;
     [HideInInspector]
     public Vector2 input_View;
 
@@ -23,6 +24,7 @@ public class PlayerCharacterController : MonoBehaviour
     public float viewClampYMin = -70;
     public float viewClampYMax = 80;
     public LayerMask playerMask;
+    public LayerMask groundMask;
 
     [Header("Gravity")]
     public float gravity;
@@ -47,12 +49,23 @@ public class PlayerCharacterController : MonoBehaviour
     private Vector3 stanceCapsuleCenterVelocity;
     private float stanceCapsuleHeightVelocity;
 
+    [HideInInspector]
     public bool isSprinting;
+
     private Vector3 newMovementSpeed;
     private Vector3 newMovementSpeedVelocity;
 
     [Header("Weapon")]
     public WeaponController currentWeapon;
+
+    public float weaponAnimationSpeed;
+
+    [HideInInspector]
+    public bool isGrounded;
+    [HideInInspector]
+    public bool isFalling;
+
+    #region - Awake -
 
     private void Awake() {
         defaultInput = new DefaultInput();
@@ -79,13 +92,34 @@ public class PlayerCharacterController : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region - Update -
+
     private void Update() {
         CalculateView();
         CalculateMovement();
         CalculateJump();
         CalculateStance();
-
+        SetIsGrounded();
+        SetIsFalling();
     }
+
+    #endregion
+
+    #region - IsFalling / IsGrounded -
+
+    private void SetIsGrounded() {
+        isGrounded = Physics.CheckSphere(feetTransform.position, playerSettings.IsGroundedRadius, groundMask);
+    }
+
+    private void SetIsFalling() {
+        isFalling = !isGrounded && characterController.velocity.magnitude > playerSettings.IsFallingSpeed;
+    }
+
+    #endregion
+
+    #region - View/Movement -
 
     private void CalculateView() {
         newCharacterRotation.y += playerSettings.ViewXSensitivity * (playerSettings.ViewXInverted ?  -input_View.x : input_View.x) * Time.deltaTime;
@@ -107,12 +141,15 @@ public class PlayerCharacterController : MonoBehaviour
         }
 
         if (playerStance == PlayerStance.Crouching) {
-            forwardSpeed *= playerSettings.CrouchSpeedModifier;
-            strafeSpeed *= playerSettings.CrouchSpeedModifier;
+            playerSettings.SpeedModifier = playerSettings.CrouchSpeedModifier;
         } else {
-            forwardSpeed *= playerSettings.SpeedModifier;
-            strafeSpeed *= playerSettings.SpeedModifier;
+            playerSettings.SpeedModifier = 1;
         }
+
+        weaponAnimationSpeed = characterController.velocity.magnitude / playerSettings.WalkingForwardSpeed * playerSettings.SpeedModifier;
+
+        forwardSpeed *= playerSettings.SpeedModifier;
+        strafeSpeed *= playerSettings.SpeedModifier;
 
         newMovementSpeed = Vector3.SmoothDamp(newMovementSpeed, new Vector3(strafeSpeed * input_Movement.x * Time.deltaTime, 0, forwardSpeed * input_Movement.y * Time.deltaTime), ref newMovementSpeedVelocity, playerSettings.MovementSmoothing);
         var movementSpeed = transform.TransformDirection(newMovementSpeed);
@@ -121,7 +158,7 @@ public class PlayerCharacterController : MonoBehaviour
             playerGravity -= gravity * Time.deltaTime;
         } 
 
-        if (playerGravity < -0.1f  && characterController.isGrounded) {
+        if (playerGravity < -0.1f  && isGrounded) {
             playerGravity = - 0.1f;
         }
 
@@ -131,25 +168,16 @@ public class PlayerCharacterController : MonoBehaviour
         characterController.Move(movementSpeed);
     }
 
+    #endregion
+
+    #region - Jump -
+
     private void CalculateJump(){
         jumpForce = Vector3.SmoothDamp(jumpForce, Vector3.zero, ref jumpForceVelocity, playerSettings.JumpFalloff);
     }
 
-    private void CalculateStance() {
-        var currentStance = playerStandStance;
-        if (playerStance == PlayerStance.Crouching) {
-            currentStance = playerCrouchStance;
-        }
-        cameraHeight = Mathf.SmoothDamp(cameraHolder.transform.localPosition.y, currentStance.CameraHeight, ref cameraHeightVelocity, playerStanceSmoothing);
-
-        cameraHolder.transform.localPosition = new Vector3(cameraHolder.transform.localPosition.x, cameraHeight, cameraHolder.transform.localPosition.z);
-
-        characterController.height = Mathf.SmoothDamp(characterController.height, currentStance.StanceCollider.height, ref stanceCapsuleHeightVelocity, playerStanceSmoothing);
-        characterController.center = Vector3.SmoothDamp(characterController.center, currentStance.StanceCollider.center, ref stanceCapsuleCenterVelocity, playerStanceSmoothing);
-    }
-
     private void Jump() {
-        if (!characterController.isGrounded) { return; }
+        if (!isGrounded) { return; }
 
         if (playerStance == PlayerStance.Crouching) {
             playerStance = PlayerStance.Standing;
@@ -162,6 +190,24 @@ public class PlayerCharacterController : MonoBehaviour
 
         jumpForce = Vector3.up * playerSettings.JumpHeight;
         playerGravity = 0;
+        currentWeapon.TriggerJump();
+    }
+
+    #endregion
+
+    #region - Stance -
+
+    private void CalculateStance() {
+        var currentStance = playerStandStance;
+        if (playerStance == PlayerStance.Crouching) {
+            currentStance = playerCrouchStance;
+        }
+        cameraHeight = Mathf.SmoothDamp(cameraHolder.transform.localPosition.y, currentStance.CameraHeight, ref cameraHeightVelocity, playerStanceSmoothing);
+
+        cameraHolder.transform.localPosition = new Vector3(cameraHolder.transform.localPosition.x, cameraHeight, cameraHolder.transform.localPosition.z);
+
+        characterController.height = Mathf.SmoothDamp(characterController.height, currentStance.StanceCollider.height, ref stanceCapsuleHeightVelocity, playerStanceSmoothing);
+        characterController.center = Vector3.SmoothDamp(characterController.center, currentStance.StanceCollider.center, ref stanceCapsuleCenterVelocity, playerStanceSmoothing);
     }
 
     private IEnumerator Stand() {
@@ -186,6 +232,10 @@ public class PlayerCharacterController : MonoBehaviour
         return Physics.CheckCapsule(start, end, characterController.radius, playerMask);
     }
 
+    #endregion
+
+    #region - Sprinting -
+
     private void ToggleSprint() {
         /*if (input_Movement.y <= 0.2f) {
             isSprinting = false;
@@ -193,4 +243,14 @@ public class PlayerCharacterController : MonoBehaviour
         }*/
         isSprinting = !isSprinting;
     }
+
+    #endregion
+
+    #region - Gizmos -
+
+    public void OnDrawGizmos() {
+        Gizmos.DrawWireSphere(feetTransform.position, playerSettings.IsGroundedRadius);
+    }
+
+    #endregion
 }
