@@ -177,7 +177,6 @@ public class PlayerCharacterController : MonoBehaviour
     }
 
     private void Jump() {
-        Debug.Log(isGrounded);
         if (!isGrounded) { return; }
 
         if (playerStance == PlayerStance.Crouching) {

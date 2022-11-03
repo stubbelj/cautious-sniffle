@@ -58,12 +58,12 @@ public class WeaponController : MonoBehaviour
 
     private void CalculateWeaponRotation() {
         
-        targetWeaponRotation.y += weaponSettings.SwayAmount * (weaponSettings.SwayXInverted ?  -characterController.input_View.x : characterController.input_View.x) * Time.deltaTime + 190;
+        targetWeaponRotation.y += weaponSettings.SwayAmount * (weaponSettings.SwayXInverted ?  -characterController.input_View.x : characterController.input_View.x) * Time.deltaTime + 206;
         targetWeaponRotation.x += weaponSettings.SwayAmount * (weaponSettings.SwayYInverted ?  characterController.input_View.y : -characterController.input_View.y) * Time.deltaTime;
 
         targetWeaponRotation.x = Mathf.Clamp(targetWeaponRotation.x, -weaponSettings.SwayClampX, weaponSettings.SwayClampX);
-        targetWeaponRotation.y = Mathf.Clamp(targetWeaponRotation.y, -weaponSettings.SwayClampY, weaponSettings.SwayClampY + 190);
-        targetWeaponRotation.z = targetWeaponRotation.y - 190;
+        targetWeaponRotation.y = Mathf.Clamp(targetWeaponRotation.y, -weaponSettings.SwayClampY, weaponSettings.SwayClampY + 206);
+        targetWeaponRotation.z = targetWeaponRotation.y - 206;
 
         targetWeaponRotation = Vector3.SmoothDamp(targetWeaponRotation, Vector3.zero, ref targetWeaponRotationVelocity, weaponSettings.SwayResetSmoothing);
         newWeaponRotation = Vector3.SmoothDamp(newWeaponRotation, targetWeaponRotation, ref newWeaponRotationVelocity, weaponSettings.SwaySmoothing);
