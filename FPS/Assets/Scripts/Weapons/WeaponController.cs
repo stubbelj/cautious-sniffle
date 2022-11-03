@@ -27,11 +27,11 @@ public class WeaponController : MonoBehaviour
     Vector3 targetWeaponMovementRotation;
     Vector3 targetWeaponMovementRotationVelocity;
 
-    private bool isGroundedTrigger = true;
-    private float fallingDelay = 0;
+    private bool isGroundedTrigger;
+    private float fallingDelay;
     
-    private bool hasLanded;
-    private float hasLandedDelay = 0;
+    //private bool hasLanded;
+    //private float hasLandedDelay = 0;
 
     private void Start() {
         newWeaponRotation = transform.localRotation.eulerAngles;

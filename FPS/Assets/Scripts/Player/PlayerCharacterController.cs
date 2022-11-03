@@ -177,6 +177,7 @@ public class PlayerCharacterController : MonoBehaviour
     }
 
     private void Jump() {
+        Debug.Log(isGrounded);
         if (!isGrounded) { return; }
 
         if (playerStance == PlayerStance.Crouching) {
@@ -184,10 +185,11 @@ public class PlayerCharacterController : MonoBehaviour
             return; 
         }
 
+        Debug.Log("makes it here");
         if (StanceCheck(playerStandStance.StanceCollider.height)) {
             return;
         }
-
+        Debug.Log("actually jumping");
         jumpForce = Vector3.up * playerSettings.JumpHeight;
         playerGravity = 0;
         currentWeapon.TriggerJump();
