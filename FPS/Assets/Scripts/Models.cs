@@ -56,6 +56,10 @@ public class Models
         public float SwaySmoothing;
         public bool SwayYInverted;
         public bool SwayXInverted;
+
+        public float SwayResetSmoothing;
+        public float SwayClampX;
+        public float SwayClampY;
     }
 
     #region - Weapons -
